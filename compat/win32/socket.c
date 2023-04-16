@@ -103,7 +103,7 @@ selfpipe_test( compat_socket_selfpipe_t *self )
 }
 
 compat_socket_selfpipe_t *
-compat_socket_selfpipe_alloc( void )
+compat_socket_selfpipe_alloc(void)
 {
   unsigned long mode = 1;
   struct sockaddr_in sa;
@@ -188,6 +188,31 @@ compat_socket_selfpipe_wake( compat_socket_selfpipe_t *self )
 
   sendto( self->self_socket, NULL, 0, 0, (struct sockaddr*)&sa, sizeof(sa) );
 }
+
+//char const hex_chars[16] = { '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F' };
+
+void compat_socket_selfpipe_senday( compat_socket_selfpipe_t *apipe, char areg, char adata)
+{
+  struct sockaddr_in sa;
+
+  memset( &sa, 0, sizeof(sa) );
+  sa.sin_family = AF_INET;
+  sa.sin_addr.s_addr = htonl( INADDR_LOOPBACK );
+  sa.sin_port = htons( 9101 );
+  
+  //char server_message[6];
+  //server_message[0]=hex_chars[ ( areg & 0xF0 ) >> 4 ];
+  //server_message[1]=hex_chars[ ( areg & 0x0F ) >> 0 ];
+  //server_message[2]=hex_chars[ ( adata & 0xF0 ) >> 4 ];
+  //server_message[3]=hex_chars[ ( adata & 0x0F ) >> 0 ];
+  //server_message[2]=13;
+  //server_message[3]=10;
+  char server_message[2];
+  server_message[0]=areg;
+  server_message[1]=adata;
+  sendto( apipe->self_socket, server_message, sizeof(server_message), 0, (struct sockaddr*)&sa, sizeof(sa) );
+}
+
 
 void
 compat_socket_selfpipe_discard_data( compat_socket_selfpipe_t *self )

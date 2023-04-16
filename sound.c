@@ -28,6 +28,7 @@
 
 #include <config.h>
 
+#include "compat.h"
 #include "fuse.h"
 #include "infrastructure/startup_manager.h"
 #include "machine.h"
@@ -39,6 +40,8 @@
 #include "timer/timer.h"
 #include "ui/ui.h"
 #include "sound/blipbuffer.h"
+
+#include "exthw/exthwmod.h"
 
 /* Do we have any of our sound devices available? */
 
@@ -177,6 +180,7 @@ sound_ay_init( void )
     ay_tone_tick[f] = ay_tone_high[f] = 0, ay_tone_period[f] = 1;
 
   ay_change_count = 0;
+  
 }
 
 #ifndef UI_WIN32
@@ -329,12 +333,18 @@ sound_init( const char *device )
   /* initialize movie settings... */
   movie_init_sound( settings_current.sound_freq, sound_stereo_ay );
 
+  /* XJ extmod */
+  exthw_module_sendlog(21);
+  /* XJ extmod end*/
 }
 
 void
 sound_pause( void )
 {
   if( sound_enabled )
+	/* XJ extmod */
+	exthwmod_aymute();
+    /* XJ extmod end*/
     sound_end();
 }
 
@@ -373,8 +383,8 @@ sound_end( void )
 
     if( settings_current.sound ) 
       sound_lowlevel_end();
-    libspectrum_free( samples );
-    sound_enabled = 0;
+   libspectrum_free( samples );
+   sound_enabled = 0;
   }
 }
 
@@ -634,6 +644,9 @@ sound_ay_write( int reg, int val, libspectrum_dword now )
     ay_change[ ay_change_count ].val = val;
     ay_change_count++;
   }
+  /* XJ extmod */
+  exthw_module_senday(reg,val);
+  /* XJ extmod end*/
 }
 
 /* no need to call this initially, but should be called

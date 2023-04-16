@@ -201,6 +201,7 @@ compat_socket_selfpipe_t* compat_socket_selfpipe_alloc( void );
 void compat_socket_selfpipe_free( compat_socket_selfpipe_t *self );
 compat_socket_t compat_socket_selfpipe_get_read_fd( compat_socket_selfpipe_t *self );
 void compat_socket_selfpipe_wake( compat_socket_selfpipe_t *self );
+void compat_socket_selfpipe_senday( compat_socket_selfpipe_t *apipe, char areg, char adata);
 void compat_socket_selfpipe_discard_data( compat_socket_selfpipe_t *self );
 
 #endif				/* #ifndef FUSE_COMPAT_H */
