@@ -51,6 +51,8 @@
 #include "sound/source_synths.h"
 #include "sound/silence_noise.h"
 
+#include "exthw/exthwmod.h"
+
 /* Do we have any of our sound devices available? */
 
 /* configuration */
@@ -196,12 +198,19 @@ sound_init( const char *device )
   sound_tv_route = -1;
   sound_update_source_routes();
   movie_init_sound( settings_current.sound_freq, sound_stereo_ay );
+
+  /* XJ extmod */
+  exthw_module_sendlog(21);
+  /* XJ extmod end*/
 }
 
 void
 sound_pause( void )
 {
   if( sound_enabled )
+	/* XJ extmod */
+	exthwmod_aymute();
+    /* XJ extmod end*/
     sound_end();
 }
 
@@ -250,6 +259,9 @@ sound_ay_write( int reg, int val, libspectrum_dword now )
 {
   sound_interval_time( now );
   ay_engine_write( reg, val, now );
+  /* XJ extmod */
+  exthw_module_senday(reg,val);
+  /* XJ extmod end*/
 }
 
 void

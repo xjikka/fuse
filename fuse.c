@@ -118,6 +118,8 @@
 
 #include "z80/z80.h"
 
+#include "exthw/exthwmod.h"
+
 /* What name were we called under? */
 const char *fuse_progname;
 
@@ -334,6 +336,7 @@ run_startup_manager( int *argc, char ***argv )
   divide_register_startup();
   divmmc_register_startup();
   event_register_startup();
+  exthw_register_startup();
   fdd_register_startup();
   fuller_register_startup();
   if1_register_startup();

@@ -81,7 +81,8 @@ typedef enum startup_manager_module {
   STARTUP_MANAGER_MODULE_ZXATASP,
   STARTUP_MANAGER_MODULE_ZXCF,
   STARTUP_MANAGER_MODULE_ZXMMC,
- 
+  STARTUP_MANAGER_MODULE_EXTHW,
+  
 } startup_manager_module;
 
 /* Callback for each module's init function */

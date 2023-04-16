@@ -31,6 +31,7 @@
 
 #include "compat.h"
 #include "module.h"
+#include "exthw/exthwmod.h"
 
 static GSList *registered_modules = NULL;
 
