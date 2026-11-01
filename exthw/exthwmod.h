@@ -38,6 +38,9 @@ void exthw_module_senday( char areg, char adata );
 void exthw_module_sendlog( char adata );
 void exthwmod_aymute( void );
 
+/* Reopen the output after the options dialog changed the settings */
+void exthw_options_posthook( void );
+
 /* Nonzero when the internal AY emulation should be silenced */
 int exthw_mute_internal_ay( void );
 

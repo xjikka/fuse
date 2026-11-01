@@ -43,6 +43,7 @@
 #   - Entry (input text) - uses data 1: max. length, data 2: label text (only in GTK).
 #   - Checkbox
 #   - Combo - uses data 1: Dropdown values separated with "|" . "*" specifies default value.
+#   - Text (string input, Win32 only) - uses data 1: max. length.
 #
 # Callbacks:
 #   - Postcheck, callback function - Called function should return if to reset machine (see needs_hard_reset).
@@ -144,6 +145,18 @@ Checkbox, (O)pus Discovery interface, opus, INPUT_KEY_o
 Checkbox, ZXMMC i(n)terface, zxmmc_enabled, INPUT_KEY_n
 Postcheck, periph_postcheck
 Posthook, periph_posthook
+
+#ifdef UI_WIN32
+exthw
+Real AY Chip Output
+Combo, (O)utput, exthw_mode, INPUT_KEY_o, *None|UDP|COM
+Text, UDP (h)ost, exthw_udp_host, INPUT_KEY_h, 63
+Entry, UDP (p)ort, exthw_udp_port, INPUT_KEY_p, 5
+Text, (C)OM port, exthw_com_port, INPUT_KEY_c, 15
+Entry, COM (b)aud rate, exthw_com_baud, INPUT_KEY_b, 8
+Checkbox, (M)ute internal AY, exthw_mute_internal, INPUT_KEY_m
+Posthook, exthw_options_posthook
+#endif
 
 rzx
 RZX Options

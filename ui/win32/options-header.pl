@@ -75,7 +75,7 @@ if( $internal ) {
 	    if( $widget->{type} eq "Checkbox" ) {
 		printf "#define IDC_%s_%s %s\n",
 		    $optname, uc( $widget->{value} ), $optnum++;
-	    } elsif( $widget->{type} eq "Entry" ) {
+	    } elsif( $widget->{type} eq "Entry" || $widget->{type} eq "Text" ) {
 		printf "#define IDC_%s_%s %s\n",
 		    $optname, uc( $widget->{value} ), $optnum++;
 		printf "#define IDC_%s_LABEL_%s %s\n",

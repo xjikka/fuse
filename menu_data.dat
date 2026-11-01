@@ -84,6 +84,9 @@ Options/_Peripherals, Branch
 Options/Peripherals/_General..., Item
 Options/Peripherals/_Sound..., Item
 Options/Peripherals/_Disk..., Item
+#ifdef UI_WIN32
+Options/Peripherals/_Real AY chip..., Item,, menu_options_exthw
+#endif
 
 Options/_RZX..., Item
 Options/_Movie..., Item

@@ -35,6 +35,7 @@
 #include "fuse.h"
 #include "settings.h"
 #include "ui/ui.h"
+#include "utils.h"
 
 /* UDP packet: [reg, val]; reg 0xFF = log, 0xFE = cmd (AYSender protocol) */
 #define EXTHW_REG_LOG 0xff
@@ -292,11 +293,23 @@ exthwmod_aymute( void )
   for( i = 8; i <= 10; i++ ) exthw_module_senday( i, 0 );
 }
 
+/* Store the mode as the options dialog spells it ("None", "UDP", "COM") */
+static void
+exthw_canonical_mode( exthw_mode_t mode )
+{
+  static const char * const names[] = { "None", "UDP", "COM" };
+
+  libspectrum_free( settings_current.exthw_mode );
+  settings_current.exthw_mode = utils_safe_strdup( names[ mode ] );
+}
+
 static int
 exthwmod_init( void *context )
 {
   exthw_mode_t mode = exthw_parse_mode( settings_current.exthw_mode );
   int error = 0;
+
+  exthw_canonical_mode( mode );
 
   switch( mode ) {
   case EXTHW_MODE_UDP: error = exthw_udp_open(); break;
@@ -328,6 +341,13 @@ exthwmod_end( void )
   exthw_mode = EXTHW_MODE_NONE;
   exthw_udp_close();
   exthw_com_close();
+}
+
+void
+exthw_options_posthook( void )
+{
+  exthwmod_end();
+  exthwmod_init( NULL );
 }
 
 void

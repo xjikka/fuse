@@ -46,6 +46,7 @@ print Fuse::GPL( 'options.c: options dialog boxes',
 #include "libspectrum.h"
 
 #include "display.h"
+#include "exthw/exthwmod.h"
 #include "fuse.h"
 #include "menu.h"
 #include "options.h"
@@ -166,6 +167,16 @@ CODE
                       0, (LPARAM) buffer );
 
 CODE
+	} elsif( $type eq "Text" ) {
+	    my $idcname = uc( "$widget->{value}" );
+        print << "CODE";
+  SendDlgItemMessage( hwndDlg, IDC_${optname}_${idcname}, EM_LIMITTEXT,
+                      $widget->{data1}, 0 );
+  SendDlgItemMessage( hwndDlg, IDC_${optname}_${idcname}, WM_SETTEXT, 0,
+    (LPARAM) ( settings_current.$widget->{value} ?
+               settings_current.$widget->{value} : "" ) );
+
+CODE
 	} elsif( $type eq "Combo" ) {
           my $idcname = uc( "$widget->{value}" );
           print << "CODE";
@@ -234,6 +245,15 @@ CODE
   SendDlgItemMessage( hwndDlg, IDC_${optname}_${idcname}, WM_GETTEXT,
                       80, (LPARAM) buffer );
   settings_current.$widget->{value} = atoi( buffer );
+
+CODE
+	} elsif( $widget->{type} eq "Text" ) {
+	    my $idcname = uc( "$widget->{value}" );
+        print << "CODE";
+  SendDlgItemMessage( hwndDlg, IDC_${optname}_${idcname}, WM_GETTEXT,
+                      80, (LPARAM) buffer );
+  libspectrum_free( settings_current.$widget->{value} );
+  settings_current.$widget->{value} = utils_safe_strdup( buffer );
 
 CODE
 	} elsif( $widget->{type} eq "Combo" ) {

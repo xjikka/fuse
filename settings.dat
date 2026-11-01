@@ -310,7 +310,7 @@ teletext_port_3, numeric, 19763
 teletext_port_4, numeric, 19764
 
 # XJ extmod: real AY chip output (see exthw/exthwmod.h)
-exthw_mode, string, "none"
+exthw_mode, string, "None"
 exthw_udp_host, string, "127.0.0.1"
 exthw_udp_port, numeric, 9101
 exthw_com_port, string, "COM3"

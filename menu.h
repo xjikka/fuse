@@ -146,6 +146,7 @@ MENU_CALLBACK( menu_options_media );
 MENU_CALLBACK( menu_options_sound );
 MENU_CALLBACK( menu_options_peripherals_general );
 MENU_CALLBACK( menu_options_peripherals_sound );
+MENU_CALLBACK( menu_options_exthw );
 MENU_CALLBACK( menu_options_peripherals_disk );
 MENU_CALLBACK( menu_options_rzx );
 MENU_CALLBACK( menu_options_movie );
