@@ -28,8 +28,10 @@ snímku). Typicky 3 B na zápis. `xor` je přes `data`. Starý `'r' 0 0` při ot
 
 Vyžaduje firmware `AY_PlayerFuseTimed`. **Se starým `AY_PlayerFuse` nastavit `exthwtimed=0`**, jinak
 bajty paketů mohou starý firmware zmást. Na Nano (2 KB RAM) spolehlivě hudba a slabý digitalizovaný
-zvuk (řádově do 8 000 zápisů/s); při přetečení firmware zahazuje nejstarší snímky. Návrh:
-`exthw/doc/plan_20261101_1352_timed_ay.md`.
+zvuk (řádově do 8 000 zápisů/s); při plném bufferu firmware zahazuje jednotlivé zápisy a jejich čas
+přičte k dalšímu. Zpoždění 20 ms na Windows nestačí (dávky chodí až po 31 ms), doporučeno 40 ms.
+Návrh: `exthw/doc/plan_20261101_1352_timed_ay.md`. Firmware a výsledky simulace:
+`d:\_DataPrg\Arduino\projects\AY_PlayerFuseTimed\README.md`.
 
 ## Nastavení
 
