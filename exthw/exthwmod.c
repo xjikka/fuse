@@ -181,6 +181,121 @@ exthw_udp_send( unsigned char areg, unsigned char adata )
 
 /* ---- COM ---- */
 
+/* COM writes go through a queue and a writer thread: a synchronous WriteFile
+   of a frame takes ~8 ms at 500 kBd and would stall emulation. The thread
+   also logs status lines from the firmware to exthw_fw.log next to fuse.exe. */
+#define EXTHW_TXQ_SIZE 65536   /* power of 2 */
+
+static unsigned char txq[ EXTHW_TXQ_SIZE ];
+static size_t txq_head = 0, txq_tail = 0;
+static CRITICAL_SECTION txq_lock;
+static int txq_lock_init = 0;
+static HANDLE txq_event = NULL, tx_thread = NULL;
+static volatile LONG tx_quit = 0;
+static FILE *fw_log = NULL;
+
+static void
+exthw_com_enqueue( const unsigned char *data, size_t len )
+{
+  size_t used, i;
+
+  EnterCriticalSection( &txq_lock );
+  used = ( txq_head - txq_tail ) & ( EXTHW_TXQ_SIZE - 1 );
+  /* Queue full (device stuck): drop the whole block, packets stay intact */
+  if( len <= EXTHW_TXQ_SIZE - 1 - used ) {
+    for( i = 0; i < len; i++ ) {
+      txq[ txq_head ] = data[i];
+      txq_head = ( txq_head + 1 ) & ( EXTHW_TXQ_SIZE - 1 );
+    }
+  }
+  LeaveCriticalSection( &txq_lock );
+  SetEvent( txq_event );
+}
+
+static void
+exthw_fw_log( const char *data, DWORD len )
+{
+  if( !fw_log ) {
+    char path[ MAX_PATH ];
+    DWORD n = GetModuleFileNameA( NULL, path, MAX_PATH - 16 );
+    char *slash;
+
+    if( !n || n >= MAX_PATH - 16 ) return;
+    path[n] = 0;
+    slash = strrchr( path, '\\' );
+    if( !slash ) return;
+    strcpy( slash + 1, "exthw_fw.log" );
+    fw_log = fopen( path, "w" );
+    if( !fw_log ) return;
+  }
+  fwrite( data, 1, len, fw_log );
+  fflush( fw_log );
+}
+
+static DWORD WINAPI
+exthw_com_thread( LPVOID arg GCC_UNUSED )
+{
+  unsigned char buf[ 4096 ];
+  char rbuf[ 256 ];
+  DWORD written, got;
+  int quit;
+
+  do {
+    WaitForSingleObject( txq_event, 100 );
+    quit = tx_quit;
+    for( ;; ) {   /* drain the queue */
+      size_t n = 0;
+
+      EnterCriticalSection( &txq_lock );
+      while( txq_tail != txq_head && n < sizeof( buf ) ) {
+        buf[ n++ ] = txq[ txq_tail ];
+        txq_tail = ( txq_tail + 1 ) & ( EXTHW_TXQ_SIZE - 1 );
+      }
+      LeaveCriticalSection( &txq_lock );
+      if( !n ) break;
+      WriteFile( com_handle, buf, (DWORD)n, &written, NULL );
+    }
+    /* Firmware status text; ReadIntervalTimeout = MAXDWORD returns at once */
+    if( ReadFile( com_handle, rbuf, sizeof( rbuf ), &got, NULL ) && got )
+      exthw_fw_log( rbuf, got );
+  } while( !quit );
+
+  return 0;
+}
+
+static void
+exthw_com_thread_start( void )
+{
+  if( !txq_lock_init ) {
+    InitializeCriticalSection( &txq_lock );
+    txq_lock_init = 1;
+  }
+  txq_head = txq_tail = 0;
+  tx_quit = 0;
+  txq_event = CreateEvent( NULL, FALSE, FALSE, NULL );
+  tx_thread = CreateThread( NULL, 0, exthw_com_thread, NULL, 0, NULL );
+}
+
+static void
+exthw_com_thread_stop( void )
+{
+  if( tx_thread ) {
+    tx_quit = 1;
+    SetEvent( txq_event );
+    WaitForSingleObject( tx_thread, 2000 );   /* sends what is queued */
+    CloseHandle( tx_thread );
+    tx_thread = NULL;
+  }
+  if( txq_event ) {
+    CloseHandle( txq_event );
+    txq_event = NULL;
+  }
+  if( fw_log ) {
+    fclose( fw_log );
+    fw_log = NULL;
+  }
+}
+
 static int
 exthw_com_open( void )
 {
@@ -239,20 +354,23 @@ exthw_com_open( void )
     return 1;
   }
 
-  /* Short write timeout so an unplugged Arduino cannot freeze emulation */
+  /* Writes run in the writer thread; the timeout only keeps it from hanging
+     on an unplugged Arduino */
   memset( &timeouts, 0, sizeof( timeouts ) );
   timeouts.ReadIntervalTimeout = MAXDWORD;
-  timeouts.WriteTotalTimeoutConstant = 50;
+  timeouts.WriteTotalTimeoutConstant = 500;
   SetCommTimeouts( com_handle, &timeouts );
 
   PurgeComm( com_handle, PURGE_TXCLEAR | PURGE_RXCLEAR );
 
+  exthw_com_thread_start();
   return 0;
 }
 
 static void
 exthw_com_close( void )
 {
+  exthw_com_thread_stop();
   if( com_handle != INVALID_HANDLE_VALUE ) {
     CloseHandle( com_handle );
     com_handle = INVALID_HANDLE_VALUE;
@@ -263,21 +381,18 @@ static void
 exthw_com_send( unsigned char cmd, unsigned char areg, unsigned char adata )
 {
   unsigned char msg[ 3 ];
-  DWORD written;
 
   if( com_handle == INVALID_HANDLE_VALUE ) return;
   msg[0] = cmd;
   msg[1] = areg;
   msg[2] = adata;
-  WriteFile( com_handle, msg, sizeof( msg ), &written, NULL );
+  exthw_com_enqueue( msg, sizeof( msg ) );
 }
 
 /* Send a raw block: one UDP datagram or one COM write */
 static void
 exthw_send_block( const unsigned char *data, size_t len )
 {
-  DWORD written;
-
   switch( exthw_mode ) {
   case EXTHW_MODE_UDP:
     if( udp_socket != INVALID_SOCKET )
@@ -286,7 +401,7 @@ exthw_send_block( const unsigned char *data, size_t len )
     break;
   case EXTHW_MODE_COM:
     if( com_handle != INVALID_HANDLE_VALUE )
-      WriteFile( com_handle, data, (DWORD)len, &written, NULL );
+      exthw_com_enqueue( data, len );
     break;
   default:
     break;
