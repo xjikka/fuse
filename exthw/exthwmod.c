@@ -30,9 +30,12 @@
 #include <ws2tcpip.h>
 #include <windows.h>
 
+#include <stdlib.h>
+
 #include "infrastructure/startup_manager.h"
 #include "exthwmod.h"
 #include "fuse.h"
+#include "machine.h"
 #include "settings.h"
 #include "ui/ui.h"
 #include "utils.h"
@@ -44,6 +47,15 @@
 /* Serial protocol of AY_PlayerFuse.ino: 'w' reg val = write, 'r' x x = reset */
 #define EXTHW_COM_WRITE 'w'
 #define EXTHW_COM_RESET 'r'
+
+/* Timed protocol v2, see exthw/README.md:
+   'C' cpu_hz(u32) frame_t(u32) latency_ms(u8)   configuration
+   'F' seq(u8) len(u16) data[len] xor(u8)        one frame of writes;
+       entry = reg, val, dt (LEB128 T-states since previous entry)
+   'X' 0 0                                       flush buffer + mute */
+#define EXTHW_TIMED_CONFIG 'C'
+#define EXTHW_TIMED_FRAME  'F'
+#define EXTHW_TIMED_FLUSH  'X'
 
 typedef enum exthw_mode_t {
   EXTHW_MODE_NONE = 0,
@@ -59,6 +71,15 @@ static struct sockaddr_storage udp_addr;
 static int udp_addr_len = 0;
 
 static HANDLE com_handle = INVALID_HANDLE_VALUE;
+
+/* Timed mode state: writes of the current frame, encoded */
+static int timed = 0;
+static unsigned char *frame_buf = NULL;
+static size_t frame_len = 0, frame_alloc = 0;
+static libspectrum_dword frame_last_t = 0;
+static unsigned char frame_seq = 0;
+static libspectrum_dword sent_cpu_hz = 0, sent_frame_t = 0;
+static int sent_latency = -1;
 
 static exthw_mode_t
 exthw_parse_mode( const char *mode )
@@ -251,7 +272,149 @@ exthw_com_send( unsigned char cmd, unsigned char areg, unsigned char adata )
   WriteFile( com_handle, msg, sizeof( msg ), &written, NULL );
 }
 
+/* Send a raw block: one UDP datagram or one COM write */
+static void
+exthw_send_block( const unsigned char *data, size_t len )
+{
+  DWORD written;
+
+  switch( exthw_mode ) {
+  case EXTHW_MODE_UDP:
+    if( udp_socket != INVALID_SOCKET )
+      sendto( udp_socket, (const char *)data, (int)len, 0,
+              (struct sockaddr *)&udp_addr, udp_addr_len );
+    break;
+  case EXTHW_MODE_COM:
+    if( com_handle != INVALID_HANDLE_VALUE )
+      WriteFile( com_handle, data, (DWORD)len, &written, NULL );
+    break;
+  default:
+    break;
+  }
+}
+
+/* ---- timed mode ---- */
+
+static int
+exthw_latency_ms( void )
+{
+  const char *s = settings_current.exthw_latency;
+  int ms = s ? atoi( s ) : 40;
+
+  if( ms < 10 ) ms = 10;
+  if( ms > 250 ) ms = 250;
+  return ms;
+}
+
+static void
+frame_put( unsigned char b )
+{
+  if( frame_len == frame_alloc ) {
+    frame_alloc = frame_alloc ? frame_alloc * 2 : 1024;
+    frame_buf = libspectrum_realloc( frame_buf, frame_alloc );
+  }
+  frame_buf[ frame_len++ ] = b;
+}
+
+static void
+exthw_timed_write( unsigned char reg, unsigned char val,
+                   libspectrum_dword now )
+{
+  libspectrum_dword dt = now >= frame_last_t ? now - frame_last_t : 0;
+
+  if( now > frame_last_t ) frame_last_t = now;
+  frame_put( reg );
+  frame_put( val );
+  do {
+    unsigned char b = dt & 0x7f;
+    dt >>= 7;
+    frame_put( dt ? b | 0x80 : b );
+  } while( dt );
+}
+
+static void
+exthw_timed_reset_frame( void )
+{
+  frame_len = 0;
+  frame_last_t = 0;
+}
+
+static void
+exthw_timed_config( void )
+{
+  libspectrum_dword cpu_hz = machine_current->timings.processor_speed;
+  libspectrum_dword frame_t = machine_current->timings.tstates_per_frame;
+  int latency = exthw_latency_ms();
+  unsigned char msg[ 10 ];
+
+  if( cpu_hz == sent_cpu_hz && frame_t == sent_frame_t &&
+      latency == sent_latency )
+    return;
+
+  msg[0] = EXTHW_TIMED_CONFIG;
+  msg[1] = cpu_hz & 0xff; msg[2] = ( cpu_hz >> 8 ) & 0xff;
+  msg[3] = ( cpu_hz >> 16 ) & 0xff; msg[4] = ( cpu_hz >> 24 ) & 0xff;
+  msg[5] = frame_t & 0xff; msg[6] = ( frame_t >> 8 ) & 0xff;
+  msg[7] = ( frame_t >> 16 ) & 0xff; msg[8] = ( frame_t >> 24 ) & 0xff;
+  msg[9] = (unsigned char)latency;
+  exthw_send_block( msg, sizeof( msg ) );
+
+  sent_cpu_hz = cpu_hz;
+  sent_frame_t = frame_t;
+  sent_latency = latency;
+}
+
+static void
+exthw_timed_flush_mute( void )
+{
+  unsigned char msg[ 3 ] = { EXTHW_TIMED_FLUSH, 0, 0 };
+
+  exthw_send_block( msg, sizeof( msg ) );
+  exthw_timed_reset_frame();
+}
+
+void
+exthw_module_frame_end( libspectrum_dword frame_length GCC_UNUSED )
+{
+  unsigned char *pkt;
+  unsigned char x = 0;
+  size_t i, len;
+
+  if( !timed || !machine_current ) return;
+
+  exthw_timed_config();
+
+  /* Clamp to u16; a frame never gets near that in practice */
+  len = frame_len > 0xffff ? 0xffff : frame_len;
+  pkt = libspectrum_new( unsigned char, len + 5 );
+  pkt[0] = EXTHW_TIMED_FRAME;
+  pkt[1] = frame_seq++;
+  pkt[2] = len & 0xff;
+  pkt[3] = ( len >> 8 ) & 0xff;
+  for( i = 0; i < len; i++ ) {
+    pkt[ 4 + i ] = frame_buf[i];
+    x ^= frame_buf[i];
+  }
+  pkt[ 4 + len ] = x;
+  exthw_send_block( pkt, len + 5 );
+  libspectrum_free( pkt );
+
+  exthw_timed_reset_frame();
+}
+
 /* ---- public ---- */
+
+void
+exthw_module_senday_t( char areg, char adata, libspectrum_dword now )
+{
+  unsigned char reg = (unsigned char)areg;
+
+  if( !timed ) {
+    exthw_module_senday( areg, adata );
+    return;
+  }
+  if( reg < 14 ) exthw_timed_write( reg, (unsigned char)adata, now );
+}
 
 void
 exthw_module_senday( char areg, char adata )
@@ -290,6 +453,11 @@ void
 exthwmod_aymute( void )
 {
   int i;
+
+  if( timed ) {
+    exthw_timed_flush_mute();
+    return;
+  }
   for( i = 8; i <= 10; i++ ) exthw_module_senday( i, 0 );
 }
 
@@ -326,6 +494,10 @@ exthwmod_init( void *context )
   }
 
   exthw_mode = mode;
+  timed = exthw_mode != EXTHW_MODE_NONE && settings_current.exthw_timed;
+  sent_cpu_hz = sent_frame_t = 0;
+  sent_latency = -1;
+  exthw_timed_reset_frame();
   if( exthw_mode == EXTHW_MODE_COM )
     exthw_com_send( EXTHW_COM_RESET, 0, 0 );
   exthwmod_aymute();
@@ -338,6 +510,7 @@ exthwmod_end( void )
 {
   exthwmod_aymute();
   exthw_module_sendlog( (char)255 );
+  timed = 0;
   exthw_mode = EXTHW_MODE_NONE;
   exthw_udp_close();
   exthw_com_close();

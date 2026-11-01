@@ -30,11 +30,19 @@
      exthw_udp_port      e.g. 9101
      exthw_com_port      e.g. "COM3"
      exthw_com_baud      e.g. 2000000
-     exthw_mute_internal 1 = silence Fuse's own AY emulation when mode != none */
+     exthw_mute_internal 1 = silence Fuse's own AY emulation when mode != none
+     exthw_timed         1 = frames of time-stamped writes (protocol v2)
+     exthw_latency       "20 ms" | "40 ms" | "60 ms" playback delay on the device */
 
 void exthw_register_startup( void );
 
+#include <libspectrum.h>
+
 void exthw_module_senday( char areg, char adata );
+/* AY write with its T-state time in the frame (timed mode buffers it) */
+void exthw_module_senday_t( char areg, char adata, libspectrum_dword now );
+/* End of emulated frame: sends the buffered writes in timed mode */
+void exthw_module_frame_end( libspectrum_dword frame_length );
 void exthw_module_sendlog( char adata );
 void exthwmod_aymute( void );
 

@@ -44,6 +44,7 @@
 #include "settings.h"
 #include "sound.h"
 #include "spectrum.h"
+#include "exthw/exthwmod.h"
 #include "tape.h"
 #include "tape_internals.h"
 #include "timer/timer.h"
@@ -156,6 +157,8 @@ spectrum_frame( void )
   if( z80.interrupts_enabled_at >= 0 )
     z80.interrupts_enabled_at -= frame_length;
 
+  /* XJ extmod: timed real AY output, independent of sound */
+  exthw_module_frame_end( frame_length );
   if( sound_enabled ) sound_frame();
 
   if( display_frame() ) return 1;

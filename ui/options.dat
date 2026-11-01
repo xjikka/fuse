@@ -155,6 +155,8 @@ Entry, UDP (p)ort, exthw_udp_port, INPUT_KEY_p, 5
 Text, (C)OM port, exthw_com_port, INPUT_KEY_c, 15
 Entry, COM (b)aud rate, exthw_com_baud, INPUT_KEY_b, 8
 Checkbox, (M)ute internal AY, exthw_mute_internal, INPUT_KEY_m
+Checkbox, (T)imed output (firmware v2), exthw_timed, INPUT_KEY_t
+Combo, (L)atency, exthw_latency, INPUT_KEY_l, 20 ms|*40 ms|60 ms
 Posthook, exthw_options_posthook
 #endif
 

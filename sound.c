@@ -263,7 +263,7 @@ sound_ay_write( int reg, int val, libspectrum_dword now )
   sound_interval_time( now );
   ay_engine_write( reg, val, now );
   /* XJ extmod */
-  exthw_module_senday(reg,val);
+  exthw_module_senday_t( reg, val, now );
   /* XJ extmod end*/
 }
 
