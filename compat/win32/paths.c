@@ -26,6 +26,7 @@
 #ifdef HAVE_LIBGEN_H
 #include <libgen.h>
 #endif				/* #ifdef HAVE_LIBGEN_H */
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <windows.h>
@@ -50,7 +51,29 @@ compat_get_temp_path( void )
 const char*
 compat_get_config_path( void )
 {
+  static char exe_dir[ PATH_MAX ];
+  static int checked = 0;
   const char *dir;
+
+  /* Portable mode: fuse.cfg next to fuse.exe takes precedence */
+  if( !checked ) {
+    char cfg[ PATH_MAX ];
+    char *slash;
+    DWORD len = GetModuleFileName( NULL, exe_dir, PATH_MAX );
+
+    checked = 1;
+    slash = ( len && len < PATH_MAX ) ? strrchr( exe_dir, '\\' ) : NULL;
+    if( slash ) {
+      *slash = '\0';
+      snprintf( cfg, PATH_MAX, "%s\\fuse.cfg", exe_dir );
+      if( GetFileAttributes( cfg ) == INVALID_FILE_ATTRIBUTES )
+        exe_dir[0] = '\0';
+    } else {
+      exe_dir[0] = '\0';
+    }
+  }
+  if( exe_dir[0] ) return exe_dir;
+
   dir = getenv( "USERPROFILE" ); if( dir ) return dir;
   dir = getenv( "WINDIR" ); if( dir ) return dir;
   return ".";
