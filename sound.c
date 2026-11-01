@@ -185,7 +185,9 @@ sound_init( const char *device )
 #endif
   if( audio_cut_interval && audio_event < 0 )
     audio_event = event_register( sound_audio_event, "Audio cut" );
-  ay_engine_init( settings_current.volume_ay, sound_stereo_ay );
+  /* XJ extmod: internal AY is silent when a real chip is attached */
+  ay_engine_init( exthw_mute_internal_ay() ? 0 : settings_current.volume_ay,
+                  sound_stereo_ay );
   source_synths_init( left_buf, right_buf, sound_channels == 2,
                       settings_current.volume_specdrum,
                       settings_current.volume_covox,
@@ -207,11 +209,12 @@ sound_init( const char *device )
 void
 sound_pause( void )
 {
-  if( sound_enabled )
-	/* XJ extmod */
-	exthwmod_aymute();
+  if( sound_enabled ) {
+    /* XJ extmod */
+    exthwmod_aymute();
     /* XJ extmod end*/
     sound_end();
+  }
 }
 
 void

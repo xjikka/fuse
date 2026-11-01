@@ -1,4 +1,4 @@
-/* exthwmod.h: external hw module
+/* exthwmod.h: external hw module (real AY chip output via UDP or COM)
    Copyright (c) 2023 XJ
 
    This program is free software; you can redistribute it and/or modify
@@ -17,45 +17,28 @@
 
    Author contact information:
 
-   E-mail: 
+   E-mail:
 
 */
 
 #ifndef FUSE_EXTHWMOD_H
 #define FUSE_EXTHWMOD_H
 
-#ifdef WIN32
-#include <winsock2.h>
-#endif
+/* Settings (fuse.cfg / command line), see exthw/README.md:
+     exthw_mode          "none" | "udp" | "com"
+     exthw_udp_host      e.g. "127.0.0.1"
+     exthw_udp_port      e.g. 9101
+     exthw_com_port      e.g. "COM3"
+     exthw_com_baud      e.g. 2000000
+     exthw_mute_internal 1 = silence Fuse's own AY emulation when mode != none */
 
 void exthw_register_startup( void );
 
-/* Socket handling */
+void exthw_module_senday( char areg, char adata );
+void exthw_module_sendlog( char adata );
+void exthwmod_aymute( void );
 
-#ifndef WIN32
-typedef int exhw_socket_t;
-#else                           /* #ifndef WIN32 */
-typedef SOCKET exhw_socket_t;
-#endif
-
-
-extern const exhw_socket_t ay_socket_invalid;
-extern const int ay_socket_EBADF;
-
-//int ay_socket_close( exhw_socket_t fd );
-//int ay_socket_get_error( void );
-//const char *ay_socket_get_strerror( void );
-
-typedef struct exhw_module_t exhw_module_t;
-
-//static exhw_module_t *exthwmod = NULL;
-//exhw_module_t* exthw_module_alloc( void );
-//void exthw_module_free( exhw_module_t *self );
-void exthw_module_senday(char areg, char adata);
-void exthw_module_sendlog(char adata);
-void exthwmod_aymute(void);
-//exhw_socket_t exthw_module_get_read_fd( exhw_module_t *self );
-//void exthw_module_wake( exhw_module_t *self );
-//void exthw_module_discard_data( exhw_module_t *self );
+/* Nonzero when the internal AY emulation should be silenced */
+int exthw_mute_internal_ay( void );
 
 #endif				/* #ifndef FUSE_EXTHWMOD_H */
