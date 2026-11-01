@@ -23,13 +23,21 @@ datagram.
 | snímek | `'F'` seq(u8) len(u16 LE) data[len] xor(u8) | zápisy jednoho snímku (posílá se i prázdný) |
 | flush+mute | `'X'` 0 0 | vyprázdnit buffer, ztlumit (pauza, reset, konec) |
 
-Položka v `data`: `reg`, `val`, `dt` (varint LEB128: T-stavy od předchozí položky, u první od začátku
-snímku). Typicky 3 B na zápis. `xor` je přes `data`. Starý `'r' 0 0` při otevření COM zůstává.
+Položka v `data`:
+- plná: `reg` (0–13), `val`, `dt` (varint LEB128: T-stavy od předchozí položky, u první od začátku
+  snímku), typicky 3–4 B;
+- krátká, jen pro stejný registr jako předchozí položka téhož snímku a `val` < 32 (digi přes hlasitost):
+  `0x40|val` + int8 (dt − předchozí dt), nebo `0x60|val` při stejném dt. 1–2 B.
 
-Vyžaduje firmware `AY_PlayerFuseTimed`. **Se starým `AY_PlayerFuse` nastavit `exthwtimed=0`**, jinak
-bajty paketů mohou starý firmware zmást. Na Nano (2 KB RAM) spolehlivě hudba a slabý digitalizovaný
-zvuk (řádově do 8 000 zápisů/s); při plném bufferu firmware zahazuje jednotlivé zápisy a jejich čas
-přičte k dalšímu. Zpoždění 20 ms na Windows nestačí (dávky chodí až po 31 ms), doporučeno 40 ms.
+R8–R10 se posílají jen 5 bitů (víc čip nedrží). Snímek má nejvýš 1024 B, další zápisy toho snímku
+se vynechají (čas se přičte k dalšímu). `xor` je přes `data`. Starý `'r' 0 0` při otevření COM zůstává.
+
+Vyžaduje firmware `AY_PlayerFuseTimed` a **COM 1 000 000 Bd** (`exthwcombaud`). Při 2 Mbaud by Nano
+během dávky trávil skoro všechen čas v přerušení příjmu a zápisy by se opožďovaly.
+**Se starým `AY_PlayerFuse` nastavit `exthwtimed=0`** (a jeho 2 000 000 Bd), jinak bajty paketů starý
+firmware zmatou. Na Nano spolehlivě hudba i digi kolem 10 000 zápisů/s (Lyra II part 6: 9 750 zápisů/s,
+391 B na snímek). Firmware přehrává jen snímky se správným `xor`, vadný snímek vynechá.
+Zpoždění 20 ms na Windows nestačí (dávky chodí až po 31 ms), doporučeno 40 ms.
 Návrh: `exthw/doc/plan_20261101_1352_timed_ay.md`. Firmware a výsledky simulace:
 `d:\_DataPrg\Arduino\projects\AY_PlayerFuseTimed\README.md`.
 
@@ -43,7 +51,7 @@ XML; FUSE ho přepíše při ukončení (autosave) nebo při „Save options". U
 <exthwudphost>127.0.0.1</exthwudphost>
 <exthwudpport>9101</exthwudpport>
 <exthwcomport>COM3</exthwcomport>
-<exthwcombaud>2000000</exthwcombaud>
+<exthwcombaud>1000000</exthwcombaud>  <!-- 2000000 se starým AY_PlayerFuse -->
 <exthwmuteinternal>1</exthwmuteinternal> <!-- 1 = při mode != none ztlumit interní AY -->
 <exthwtimed>1</exthwtimed>             <!-- 1 = protokol v2 (firmware AY_PlayerFuseTimed) -->
 <exthwlatency>40 ms</exthwlatency>     <!-- 20 ms | 40 ms | 60 ms -->
@@ -51,7 +59,7 @@ XML; FUSE ho přepíše při ukončení (autosave) nebo při „Save options". U
 
 Všechno jde nastavit i v dialogu **Options → Peripherals → Real AY chip...**.
 
-Nebo z příkazové řádky: `--exthw-mode com --exthw-com-port COM3 --exthw-com-baud 2000000`,
+Nebo z příkazové řádky: `--exthw-mode com --exthw-com-port COM3 --exthw-com-baud 1000000`,
 `--exthw-mode udp --exthw-udp-host 192.168.1.10 --exthw-udp-port 9101`, `--no-exthw-mute-internal`, `--no-exthw-timed`, `--exthw-latency "20 ms"`.
 
 Výchozí `exthwmode` je `none` (čistý FUSE). Když se port nepodaří otevřít, FUSE ohlásí chybu

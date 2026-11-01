@@ -316,20 +316,47 @@ frame_put( unsigned char b )
   frame_buf[ frame_len++ ] = b;
 }
 
+/* Short entry forms (same reg as the previous entry of this frame, value
+   < 32): SHORT_DELTA|val + int8 dt delta, or SHORT_SAME|val for equal dt */
+#define EXTHW_SHORT_DELTA 0x40
+#define EXTHW_SHORT_SAME 0x60
+#define EXTHW_MAX_FRAME 1024   /* firmware ring on Nano is ~1500 bytes */
+
+static int frame_prev_reg = -1;
+static libspectrum_dword frame_prev_dt = 0;
+
 static void
 exthw_timed_write( unsigned char reg, unsigned char val,
                    libspectrum_dword now )
 {
   libspectrum_dword dt = now >= frame_last_t ? now - frame_last_t : 0;
+  long delta = (long)dt - (long)frame_prev_dt;
+
+  /* Frame full: skip the write, its time goes to the next one */
+  if( frame_len + 8 > EXTHW_MAX_FRAME ) return;
 
   if( now > frame_last_t ) frame_last_t = now;
-  frame_put( reg );
-  frame_put( val );
-  do {
-    unsigned char b = dt & 0x7f;
-    dt >>= 7;
-    frame_put( dt ? b | 0x80 : b );
-  } while( dt );
+  if( reg >= 8 && reg <= 10 ) val &= 0x1f;   /* the chip keeps 5 bits */
+
+  if( reg == frame_prev_reg && val < 32 && delta >= -128 && delta <= 127 ) {
+    if( delta == 0 ) {
+      frame_put( EXTHW_SHORT_SAME | val );
+    } else {
+      frame_put( EXTHW_SHORT_DELTA | val );
+      frame_put( (unsigned char)( delta & 0xff ) );
+    }
+  } else {
+    libspectrum_dword v = dt;
+    frame_put( reg );
+    frame_put( val );
+    do {
+      unsigned char b = v & 0x7f;
+      v >>= 7;
+      frame_put( v ? b | 0x80 : b );
+    } while( v );
+  }
+  frame_prev_reg = reg;
+  frame_prev_dt = dt;
 }
 
 static void
@@ -337,6 +364,8 @@ exthw_timed_reset_frame( void )
 {
   frame_len = 0;
   frame_last_t = 0;
+  frame_prev_reg = -1;
+  frame_prev_dt = 0;
 }
 
 static void
