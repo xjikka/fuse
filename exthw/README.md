@@ -11,7 +11,8 @@ Při pauze a ukončení se pošle R8–R10 = 0 (umlčení).
 
 ## Nastavení
 
-`%USERPROFILE%\fuse.cfg` (XML, FUSE ho přepíše při „Save options"):
+`fuse.cfg` vedle `fuse.exe` (portable režim), jinak `%USERPROFILE%\fuse.cfg`.
+XML; FUSE ho přepíše při ukončení (autosave) nebo při „Save options". Upravovat jen při zavřeném FUSE.
 
 ```xml
 <exthwmode>com</exthwmode>            <!-- none | udp | com -->
