@@ -157,6 +157,7 @@ Entry, COM (b)aud rate, exthw_com_baud, INPUT_KEY_b, 8
 Checkbox, (M)ute internal AY, exthw_mute_internal, INPUT_KEY_m
 Checkbox, (T)imed output (firmware v2), exthw_timed, INPUT_KEY_t
 Combo, (L)atency, exthw_latency, INPUT_KEY_l, 20 ms|*40 ms|60 ms
+Combo, Max (f)rame size, exthw_max_frame, INPUT_KEY_f, *1024 B (Nano)|16000 B (Pico)
 Posthook, exthw_options_posthook
 #endif
 

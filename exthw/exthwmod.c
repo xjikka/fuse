@@ -435,7 +435,19 @@ frame_put( unsigned char b )
    < 32): SHORT_DELTA|val + int8 dt delta, or SHORT_SAME|val for equal dt */
 #define EXTHW_SHORT_DELTA 0x40
 #define EXTHW_SHORT_SAME 0x60
-#define EXTHW_MAX_FRAME 1024   /* firmware ring on Nano is ~1500 bytes */
+/* Frame cap: firmware ring is ~1500 B on Nano, 32000 B on Pico */
+static size_t
+exthw_max_frame( void )
+{
+  const char *s = settings_current.exthw_max_frame;
+  int n = s ? atoi( s ) : 1024;
+
+  if( n < 256 ) n = 256;
+  if( n > 16000 ) n = 16000;
+  return (size_t)n;
+}
+
+static size_t frame_cap = 1024;
 
 static int frame_prev_reg = -1;
 static libspectrum_dword frame_prev_dt = 0;
@@ -448,7 +460,7 @@ exthw_timed_write( unsigned char reg, unsigned char val,
   long delta = (long)dt - (long)frame_prev_dt;
 
   /* Frame full: skip the write, its time goes to the next one */
-  if( frame_len + 8 > EXTHW_MAX_FRAME ) return;
+  if( frame_len + 8 > frame_cap ) return;
 
   if( now > frame_last_t ) frame_last_t = now;
   if( reg >= 8 && reg <= 10 ) val &= 0x1f;   /* the chip keeps 5 bits */
@@ -478,6 +490,7 @@ static void
 exthw_timed_reset_frame( void )
 {
   frame_len = 0;
+  frame_cap = exthw_max_frame();
   frame_last_t = 0;
   frame_prev_reg = -1;
   frame_prev_dt = 0;

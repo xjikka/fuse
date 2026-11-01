@@ -29,8 +29,8 @@ Položka v `data`:
 - krátká, jen pro stejný registr jako předchozí položka téhož snímku a `val` < 32 (digi přes hlasitost):
   `0x40|val` + int8 (dt − předchozí dt), nebo `0x60|val` při stejném dt. 1–2 B.
 
-R8–R10 se posílají jen 5 bitů (víc čip nedrží). Snímek má nejvýš 1024 B, další zápisy toho snímku
-se vynechají (čas se přičte k dalšímu). `xor` je přes `data`. Starý `'r' 0 0` při otevření COM zůstává.
+R8–R10 se posílají jen 5 bitů (víc čip nedrží). Snímek má nejvýš `exthwmaxframe` bajtů (Nano 1024 B,
+Pico 16000 B), další zápisy toho snímku se vynechají (čas se přičte k dalšímu). `xor` je přes `data`. Starý `'r' 0 0` při otevření COM zůstává.
 
 Vyžaduje firmware `AY_PlayerFuseTimed` a **COM 500 000 Bd** (`exthwcombaud`). Při 2 Mbaud by Nano
 během dávky trávil skoro všechen čas v přerušení příjmu a zápisy by se opožďovaly; 115 200 Bd stačí
@@ -56,12 +56,13 @@ XML; FUSE ho přepíše při ukončení (autosave) nebo při „Save options". U
 <exthwmuteinternal>1</exthwmuteinternal> <!-- 1 = při mode != none ztlumit interní AY -->
 <exthwtimed>1</exthwtimed>             <!-- 1 = protokol v2 (firmware AY_PlayerFuseTimed) -->
 <exthwlatency>40 ms</exthwlatency>     <!-- 20 ms | 40 ms | 60 ms -->
+<exthwmaxframe>1024 B (Nano)</exthwmaxframe> <!-- 16000 B (Pico): firmware na RP2040 -->
 ```
 
 Všechno jde nastavit i v dialogu **Options → Peripherals → Real AY chip...**.
 
 Nebo z příkazové řádky: `--exthw-mode com --exthw-com-port COM3 --exthw-com-baud 500000`,
-`--exthw-mode udp --exthw-udp-host 192.168.1.10 --exthw-udp-port 9101`, `--no-exthw-mute-internal`, `--no-exthw-timed`, `--exthw-latency "20 ms"`.
+`--exthw-mode udp --exthw-udp-host 192.168.1.10 --exthw-udp-port 9101`, `--no-exthw-mute-internal`, `--no-exthw-timed`, `--exthw-latency "20 ms"`, `--exthw-max-frame "16000 B (Pico)"`.
 
 Výchozí `exthwmode` je `none` (čistý FUSE). Když se port nepodaří otevřít, FUSE ohlásí chybu
 a běží dál bez externího výstupu.

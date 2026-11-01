@@ -318,3 +318,4 @@ exthw_com_baud, numeric, 2000000
 exthw_mute_internal, boolean, 1
 exthw_timed, boolean, 1
 exthw_latency, string, "40 ms"
+exthw_max_frame, string, "1024 B (Nano)"
