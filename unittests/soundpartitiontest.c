@@ -21,6 +21,11 @@
 #include "event.c"
 int rzx_playback;
 enum debugger_mode_t debugger_mode = DEBUGGER_MODE_INACTIVE;
+/* exthw hooks used by sound.c; no external AY in tests */
+void exthw_module_senday( char areg, char adata ) { (void)areg; (void)adata; }
+void exthw_module_sendlog( char adata ) { (void)adata; }
+void exthwmod_aymute( void ) {}
+int exthw_mute_internal_ay( void ) { return 0; }
 /* Include the implementations to inspect private synthesis/filter state.
    No test entry points or state-observation hooks enter production. */
 #include "sound/ay_engine.c"
