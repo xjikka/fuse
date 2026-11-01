@@ -257,13 +257,16 @@ exthw_module_senday( char areg, char adata )
 {
   unsigned char reg = (unsigned char)areg;
 
+  /* R14/R15 are the AY I/O port (RS232/MIDI/keypad on 128K), not sound */
+  if( reg == 14 || reg == 15 ) return;
+
   switch( exthw_mode ) {
   case EXTHW_MODE_UDP:
     exthw_udp_send( reg, (unsigned char)adata );
     break;
   case EXTHW_MODE_COM:
     /* Arduino knows only AY registers; log/cmd pseudo registers are UDP-only */
-    if( reg < 16 ) exthw_com_send( EXTHW_COM_WRITE, reg, (unsigned char)adata );
+    if( reg < 14 ) exthw_com_send( EXTHW_COM_WRITE, reg, (unsigned char)adata );
     break;
   default:
     break;

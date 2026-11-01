@@ -4,8 +4,8 @@ Každý zápis do registru AY ve FUSE (`sound_ay_write`) se pošle i ven:
 
 | režim | cíl | formát |
 |---|---|---|
-| `udp` | `exthwudphost:exthwudpport` (AYSender) | 2 B `[reg, val]`; reg 0xFF = log (1 start, 21 init zvuku, 255 konec), 0xFE = cmd |
-| `com` | `exthwcomport` @ `exthwcombaud` (Arduino `AY_PlayerFuse.ino`) | 3 B `'w' reg val`; při startu `'r' 0 0` (reset AY). Log/cmd se neposílají. |
+| `udp` | `exthwudphost:exthwudpport` (AYSender) | 2 B `[reg, val]`, jen R0–R13; reg 0xFF = log (1 start, 21 init zvuku, 255 konec), 0xFE = cmd |
+| `com` | `exthwcomport` @ `exthwcombaud` (Arduino `AY_PlayerFuse.ino`) | 3 B `'w' reg val`, jen R0–R13; při startu `'r' 0 0` (reset AY). Log/cmd se neposílají. |
 
 Při pauze a ukončení se pošle R8–R10 = 0 (umlčení).
 
