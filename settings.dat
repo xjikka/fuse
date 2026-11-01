@@ -282,3 +282,11 @@ disk_try_merge, string, NULL
 disk_ask_merge, boolean, 1
 
 debugger_command, string, NULL
+
+# XJ extmod: real AY chip output (see exthw/exthwmod.h)
+exthw_mode, string, "none"
+exthw_udp_host, string, "127.0.0.1"
+exthw_udp_port, numeric, 9101
+exthw_com_port, string, "COM3"
+exthw_com_baud, numeric, 2000000
+exthw_mute_internal, boolean, 1

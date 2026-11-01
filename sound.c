@@ -120,6 +120,14 @@ sound_get_volume( int volume )
   return volume / 100.0;
 }
 
+/* XJ extmod: internal AY is silent when a real chip is attached */
+static double
+sound_get_ay_volume( void )
+{
+  if( exthw_mute_internal_ay() ) return 0.0;
+  return sound_get_volume( settings_current.volume_ay );
+}
+
 /* Returns the emulation speed adjusted processor speed */
 libspectrum_dword
 sound_get_effective_processor_speed( void )
@@ -235,17 +243,17 @@ sound_init( const char *device )
 
   ay_a_synth = new_Blip_Synth();
   blip_synth_set_volume( ay_a_synth,
-                         sound_get_volume( settings_current.volume_ay) );
+                         sound_get_ay_volume() );
   blip_synth_set_treble_eq( ay_a_synth, treble );
 
   ay_b_synth = new_Blip_Synth();
   blip_synth_set_volume( ay_b_synth,
-                         sound_get_volume( settings_current.volume_ay) );
+                         sound_get_ay_volume() );
   blip_synth_set_treble_eq( ay_b_synth, treble );
 
   ay_c_synth = new_Blip_Synth();
   blip_synth_set_volume( ay_c_synth,
-                         sound_get_volume( settings_current.volume_ay) );
+                         sound_get_ay_volume() );
   blip_synth_set_treble_eq( ay_c_synth, treble );
 
   left_specdrum_synth = new_Blip_Synth();
@@ -294,7 +302,7 @@ sound_init( const char *device )
 
     *ay_mid_synth_r = new_Blip_Synth();
     blip_synth_set_volume( *ay_mid_synth_r,
-                           sound_get_volume( settings_current.volume_ay ) );
+                           sound_get_ay_volume() );
     blip_synth_set_output( *ay_mid_synth_r, right_buf );
     blip_synth_set_treble_eq( *ay_mid_synth_r, treble );
 
@@ -341,11 +349,12 @@ sound_init( const char *device )
 void
 sound_pause( void )
 {
-  if( sound_enabled )
-	/* XJ extmod */
-	exthwmod_aymute();
+  if( sound_enabled ) {
+    /* XJ extmod */
+    exthwmod_aymute();
     /* XJ extmod end*/
     sound_end();
+  }
 }
 
 void
