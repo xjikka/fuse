@@ -194,6 +194,45 @@ static HANDLE txq_event = NULL, tx_thread = NULL;
 static volatile LONG tx_quit = 0;
 static FILE *fw_log = NULL;
 
+/* Host-side diagnostics: "H <s> ..." lines in exthw_fw.log, between the
+   firmware "S" lines; see exthw/README.md */
+#define EXTHW_DIAG_GAP_MS 40.0    /* emulation frame gap worth a line */
+#define EXTHW_DIAG_WRITE_MS 20.0  /* slow WriteFile worth a line */
+static char diag_buf[ 4096 ];
+static size_t diag_len = 0;
+static int fw_mid_line = 0;
+static double frame_end_ms = 0;   /* last frame end, exthw_ms() */
+static LARGE_INTEGER diag_freq, diag_start;
+
+static double
+exthw_ms( void )
+{
+  LARGE_INTEGER t;
+
+  if( !diag_freq.QuadPart ) return 0;
+  QueryPerformanceCounter( &t );
+  return ( t.QuadPart - diag_start.QuadPart ) * 1000.0 / diag_freq.QuadPart;
+}
+
+/* Caller holds txq_lock */
+static void
+exthw_diag_locked( const char *text )
+{
+  int n = snprintf( diag_buf + diag_len, sizeof( diag_buf ) - diag_len,
+                    "H %.3f %s\n", exthw_ms() / 1000.0, text );
+
+  if( n > 0 && (size_t)n < sizeof( diag_buf ) - diag_len ) diag_len += n;
+}
+
+static void
+exthw_diag( const char *text )
+{
+  if( !txq_lock_init ) return;
+  EnterCriticalSection( &txq_lock );
+  exthw_diag_locked( text );
+  LeaveCriticalSection( &txq_lock );
+}
+
 static void
 exthw_com_enqueue( const unsigned char *data, size_t len )
 {
@@ -207,6 +246,11 @@ exthw_com_enqueue( const unsigned char *data, size_t len )
       txq[ txq_head ] = data[i];
       txq_head = ( txq_head + 1 ) & ( EXTHW_TXQ_SIZE - 1 );
     }
+  } else {
+    char text[ 64 ];
+    snprintf( text, sizeof( text ), "queue full, dropped %u B",
+              (unsigned)len );
+    exthw_diag_locked( text );
   }
   LeaveCriticalSection( &txq_lock );
   SetEvent( txq_event );
@@ -237,27 +281,50 @@ exthw_com_thread( LPVOID arg GCC_UNUSED )
 {
   unsigned char buf[ 4096 ];
   char rbuf[ 256 ];
+  static char dbuf[ sizeof( diag_buf ) ];
   DWORD written, got;
+  size_t dlen;
   int quit;
 
   do {
     WaitForSingleObject( txq_event, 100 );
     quit = tx_quit;
     for( ;; ) {   /* drain the queue */
-      size_t n = 0;
+      size_t n = 0, left;
+      double t0, dt;
 
       EnterCriticalSection( &txq_lock );
       while( txq_tail != txq_head && n < sizeof( buf ) ) {
         buf[ n++ ] = txq[ txq_tail ];
         txq_tail = ( txq_tail + 1 ) & ( EXTHW_TXQ_SIZE - 1 );
       }
+      left = ( txq_head - txq_tail ) & ( EXTHW_TXQ_SIZE - 1 );
       LeaveCriticalSection( &txq_lock );
       if( !n ) break;
+      written = 0;
+      t0 = exthw_ms();
       WriteFile( com_handle, buf, (DWORD)n, &written, NULL );
+      dt = exthw_ms() - t0;
+      if( dt >= EXTHW_DIAG_WRITE_MS || written != n ) {
+        char text[ 96 ];
+        snprintf( text, sizeof( text ),
+                  "COM write %u B took %.0f ms, written %lu, queued %u B",
+                  (unsigned)n, dt, (unsigned long)written, (unsigned)left );
+        exthw_diag( text );
+      }
     }
     /* Firmware status text; ReadIntervalTimeout = MAXDWORD returns at once */
-    if( ReadFile( com_handle, rbuf, sizeof( rbuf ), &got, NULL ) && got )
+    if( ReadFile( com_handle, rbuf, sizeof( rbuf ), &got, NULL ) && got ) {
       exthw_fw_log( rbuf, got );
+      fw_mid_line = rbuf[ got - 1 ] != '\n';
+    }
+    if( fw_mid_line ) continue;   /* keep firmware lines whole */
+    EnterCriticalSection( &txq_lock );
+    dlen = diag_len;
+    memcpy( dbuf, diag_buf, dlen );
+    diag_len = 0;
+    LeaveCriticalSection( &txq_lock );
+    if( dlen ) exthw_fw_log( dbuf, (DWORD)dlen );
   } while( !quit );
 
   return 0;
@@ -272,6 +339,11 @@ exthw_com_thread_start( void )
   }
   txq_head = txq_tail = 0;
   tx_quit = 0;
+  diag_len = 0;
+  fw_mid_line = 0;
+  frame_end_ms = 0;
+  QueryPerformanceFrequency( &diag_freq );
+  QueryPerformanceCounter( &diag_start );
   txq_event = CreateEvent( NULL, FALSE, FALSE, NULL );
   tx_thread = CreateThread( NULL, 0, exthw_com_thread, NULL, 0, NULL );
 }
@@ -451,6 +523,7 @@ static size_t frame_cap = 1024;
 
 static int frame_prev_reg = -1;
 static libspectrum_dword frame_prev_dt = 0;
+static unsigned frame_skipped = 0;   /* writes dropped by the frame cap */
 
 static void
 exthw_timed_write( unsigned char reg, unsigned char val,
@@ -460,7 +533,7 @@ exthw_timed_write( unsigned char reg, unsigned char val,
   long delta = (long)dt - (long)frame_prev_dt;
 
   /* Frame full: skip the write, its time goes to the next one */
-  if( frame_len + 8 > frame_cap ) return;
+  if( frame_len + 8 > frame_cap ) { frame_skipped++; return; }
 
   if( now > frame_last_t ) frame_last_t = now;
   if( reg >= 8 && reg <= 10 ) val &= 0x1f;   /* the chip keeps 5 bits */
@@ -540,6 +613,23 @@ exthw_module_frame_end( libspectrum_dword frame_length GCC_UNUSED )
   if( !timed || !machine_current ) return;
 
   exthw_timed_config();
+
+  if( exthw_mode == EXTHW_MODE_COM ) {
+    double now = exthw_ms();
+    char text[ 64 ];
+    if( frame_end_ms && now - frame_end_ms >= EXTHW_DIAG_GAP_MS ) {
+      snprintf( text, sizeof( text ), "emulation gap %.0f ms",
+                now - frame_end_ms );
+      exthw_diag( text );
+    }
+    frame_end_ms = now;
+    if( frame_skipped ) {
+      snprintf( text, sizeof( text ), "frame full, %u writes skipped",
+                frame_skipped );
+      exthw_diag( text );
+    }
+  }
+  frame_skipped = 0;
 
   /* Clamp to u16; a frame never gets near that in practice */
   len = frame_len > 0xffff ? 0xffff : frame_len;

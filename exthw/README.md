@@ -42,6 +42,21 @@ Zpoždění 20 ms na Windows nestačí (dávky chodí až po 31 ms), doporučeno
 Návrh: `exthw/doc/plan_20261101_1352_timed_ay.md`. Firmware a výsledky simulace:
 `d:\_DataPrg\Arduino\projects\AY_PlayerFuseTimed\README.md`.
 
+### Diagnostika v `exthw_fw.log` (COM)
+
+Mezi řádky `S …` z firmwaru (jednou za sekundu) zapisuje FUSE řádky `H <s> <text>`, kde `<s>` jsou
+sekundy od otevření COM:
+
+| text | význam |
+|---|---|
+| `emulation gap N ms` | mezi dvěma konci snímku uběhlo ≥ 40 ms: emulace stála (okno, menu, Windows) |
+| `COM write N B took M ms, written W, queued Q B` | `WriteFile` trval ≥ 20 ms nebo nezapsal vše: zdržení v ovladači USB/COM nebo zařízení nestíhá |
+| `queue full, dropped N B` | fronta 64 kB plná, blok (snímek) zahozen |
+| `frame full, N writes skipped` | snímek narazil na `exthwmaxframe` |
+
+Výpadek (`und` ve firmwaru roste) s `emulation gap` těsně před ním způsobil FUSE nebo Windows,
+s `COM write … took` přenos.
+
 ## Nastavení
 
 `fuse.cfg` vedle `fuse.exe` (portable režim), jinak `%USERPROFILE%\fuse.cfg`.
